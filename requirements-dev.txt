@@ -1,4 +1,4 @@
-modal>=1.6
+modal[api-proxy-support]>=1.6  # extra: Claude Code cloud sessions reach Modal through an HTTPS proxy
 mcp==2.3.0
 pytest
 httpx

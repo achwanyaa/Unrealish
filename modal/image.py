@@ -33,7 +33,7 @@ vol = modal.Volume.from_name("unreal-data", create_if_missing=True)
 # Small shared state so the gateway can report status without waking the GPU.
 state = modal.Dict.from_name("unreal-state", create_if_missing=True)
 
-_NVIDIA_ICD = json.dumps(
+NVIDIA_ICD = json.dumps(
     {"file_format_version": "1.0.0", "ICD": {"library_path": "libGLX_nvidia.so.0", "api_version": "1.3"}}
 )
 
@@ -44,10 +44,11 @@ ue_image = (
         add_python="3.12",
         setup_dockerfile_commands=["USER root"],
     )
-    .apt_install("libvulkan1", "vulkan-tools")
+    # libGLX_nvidia (the Vulkan ICD) needs the X and GL-dispatch libs, or Vulkan falls back to llvmpipe.
+    .apt_install("libvulkan1", "vulkan-tools", "libx11-6", "libxext6", "libegl1", "libgl1")
     .run_commands(
         "mkdir -p /etc/vulkan/icd.d",
-        f"echo '{_NVIDIA_ICD}' > /etc/vulkan/icd.d/nvidia_icd.json",
+        f"echo '{NVIDIA_ICD}' > /etc/vulkan/icd.d/nvidia_icd.json",
     )
     .env(
         {

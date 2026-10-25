@@ -174,3 +174,30 @@ Where the code differs from the plan, or adds to it:
 Biggest unverified risk: whether Modal's GPU containers expose the NVIDIA **Vulkan/graphics** driver libraries,
 not just CUDA. `modal run modal/worker.py --step diag` answers this in a minute, before any editor boot. If
 `vulkaninfo` finds no NVIDIA device, that's the step-4 fallback discussion (packaged build, or another host).
+
+---
+
+## 9. Progress on Modal (workspace `achwanyatours`)
+
+Done:
+- **Vulkan on a Modal L4: GO.** `modal run modal/vulkan_probe.py` (plain Debian, no Epic image) lists
+  `NVIDIA L4` as `PHYSICAL_DEVICE_TYPE_DISCRETE_GPU`, driver 610.57.04. Modal injects the graphics driver
+  libs (`libGLX_nvidia`, `libnvidia-glcore`, `libnvidia-glvkspirv`, EGL), not just CUDA. There's no
+  `/dev/dri`, which the Vulkan RHI doesn't need.
+  The catch: the ICD only loads when the image has `libx11-6 libxext6 libegl1 libgl1` (X + GL-dispatch).
+  Without them, Vulkan quietly falls back to `llvmpipe` (CPU). Both images install them now.
+- **Volume `unreal-data`** created, project uploaded to `/project` (6 files).
+- **Gateway tests** pass locally (10/10).
+- **Claude Code cloud sessions** reach Modal through the HTTPS proxy only with `modal[api-proxy-support]`
+  (in `requirements-dev.txt`). Without it the CLI says "Could not connect to the Modal server".
+
+Blocked on the owner (secrets, so not something Claude can do):
+1. Modal Secret **`ghcr-epic`**: `REGISTRY_USERNAME` (GitHub user linked to an Epic account) and
+   `REGISTRY_PASSWORD` (classic PAT with `read:packages`). Needed for step 1 (image pull).
+2. Modal Secret **`unreal-mcp-auth`**: `MCP_AUTH_TOKEN` = a long random string. Put the same value in the
+   Claude Code environment as `UNREAL_MCP_TOKEN`, and set
+   `UNREAL_MCP_URL=https://achwanyatours--unreal-gateway.modal.run/mcp`. Needed for step 5.
+3. A monthly spend limit in the Modal dashboard (section 5).
+
+Next, once `ghcr-epic` exists: `modal run modal/worker.py --step diag` (also checks that the
+`dev-slim-5.5` tag exists), then `--step boot`, `--step python`, `--step screenshot`.

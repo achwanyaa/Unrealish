@@ -9,6 +9,7 @@ Full design and build order: `CONNECTION_PLAN.md`.
 - `modal/worker.py`: `UnrealWorker` (L4 GPU, one container, owns the editor process) + build-step runner
 - `modal/gateway.py`: MCP server (Streamable HTTP, bearer auth, CPU only); deploying it ships the worker too
 - `modal/volume_setup.py`: uploads `unreal-project/` to the volume at `/project`
+- `modal/vulkan_probe.py`: separate app `unreal-probe`, checks NVIDIA Vulkan on a plain image (no Epic secret)
 - `scripts/`: Unreal Python run inside the editor (`spawn_test.py`, `screenshot.py`)
 - `unreal-project/`: `SajimSandbox.uproject` + `Config/` (Remote Control, Python, no CPU throttling)
 - `tests/`: gateway tests with a fake backend (no Modal account needed)
@@ -17,9 +18,10 @@ Full design and build order: `CONNECTION_PLAN.md`.
 
 ```bash
 pip install -r requirements-dev.txt
-pytest tests/                                   # gateway auth + tools, runs locally
+python -m pytest tests/                         # gateway auth + tools, runs locally
 
 python modal/volume_setup.py                    # push project to the volume (re-run after edits)
+modal run modal/vulkan_probe.py                 # Vulkan on a Modal GPU? (~1 min L4, no Epic image)
 modal run modal/worker.py --step diag           # GPU/Vulkan visibility, no editor
 modal run modal/worker.py --step boot           # step 2
 modal run modal/worker.py --step python         # step 3
