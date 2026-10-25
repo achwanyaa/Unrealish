@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "unreal": {
+      "type": "http",
+      "url": "${UNREAL_MCP_URL:-https://YOUR-WORKSPACE--unreal-gateway.modal.run/mcp}",
+      "headers": { "Authorization": "Bearer ${UNREAL_MCP_TOKEN}" }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+# Unreal generated
+unreal-project/Saved/
+unreal-project/Intermediate/
+unreal-project/DerivedDataCache/
+unreal-project/Binaries/
+# Local screenshots pulled from the worker
+shots/
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+# Never commit secrets
+.env
