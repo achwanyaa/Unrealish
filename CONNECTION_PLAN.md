@@ -169,7 +169,15 @@ Where the code differs from the plan, or adds to it:
 - **Screenshot** uses a temporary SceneCapture2D at the viewport camera → render target → PNG, because there's
   no on-screen viewport under `-RenderOffScreen`.
 - **`.mcp.json`** reads the URL from `UNREAL_MCP_URL` too, so the workspace name stays out of the repo.
-- **Default image tag** is `dev-slim-5.5`; override with `UE_IMAGE_TAG`. This is still open question 1.
+- **Engine version is 5.8** (decided 31 Oct): image tag `dev-slim-5.8`, `.uproject` EngineAssociation 5.8.
+  If Epic's registry has no such tag, the image build fails before any GPU starts; pick the real tag in the workflow input.
+- **Runs from GitHub Actions.** Modal's client can't get through this Claude sandbox's proxy, so
+  `.github/workflows/unreal-modal.yml` runs `volume_setup.py` + `modal run modal/worker.py --step ...` on demand.
+- **Worker size:** L4 + 8 CPU cores + 32 GiB RAM (~$1.45/h). Modal's default CPU share would make the first
+  shader compile take hours. Hard cap per container lowered to 2 h; boot timeout 60 min for the first compile.
+- **First real model:** the Rafiki Machinery and Motors industrial park (Archicad → three.js .glb, 56k triangles,
+  ~1.6 km × 0.74 km). `--step model` imports it with sun/sky/fog/ground and renders 4 aerial obliques, a plan and a
+  street-level view. Exposure is pinned (EV100 14.5 against a 75,000 lux sun) because one-shot captures can't adapt.
 
 Biggest unverified risk: whether Modal's GPU containers expose the NVIDIA **Vulkan/graphics** driver libraries,
 not just CUDA. `modal run modal/worker.py --step diag` answers this in a minute, before any editor boot. If

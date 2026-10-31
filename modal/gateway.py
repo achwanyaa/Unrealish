@@ -20,7 +20,7 @@ from mcp.server.mcpserver import Image, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from mcp.server.transport_security import TransportSecuritySettings
 
-from image import GPU_TYPE, GPU_USD_PER_HOUR, app, gateway_image, state
+from image import GPU_TYPE, USD_PER_HOUR, app, gateway_image, state
 from worker import HEARTBEAT_S, UnrealWorker
 
 STALE_S = 3 * HEARTBEAT_S + 30  # no heartbeat for this long -> treat the worker as gone
@@ -82,8 +82,8 @@ class ModalBackend:
             "running": True,
             "phase": "ready" if info["ready"] else "booting",
             "uptime_s": round(uptime),
-            "est_cost_usd": round(uptime / 3600 * GPU_USD_PER_HOUR, 2),
-            "cost_note": f"{GPU_TYPE} GPU time at ~${GPU_USD_PER_HOUR}/h, approximate",
+            "est_cost_usd": round(uptime / 3600 * USD_PER_HOUR, 2),
+            "cost_note": f"{GPU_TYPE} worker at ~${USD_PER_HOUR}/h (GPU+CPU+RAM), approximate",
             "container_id": info.get("container_id"),
         }
         # A just-killed container can leave a "ready" entry behind; calling it would boot a new GPU.

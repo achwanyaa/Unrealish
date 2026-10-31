@@ -6,11 +6,15 @@ Build-order checks (CONNECTION_PLAN.md section 3) run from here:
     modal run modal/worker.py --step boot        # step 2: editor up, port 30010 answers
     modal run modal/worker.py --step python      # step 3: Python round-trip
     modal run modal/worker.py --step screenshot  # step 4: cube + light -> PNG (go/no-go)
+    modal run modal/worker.py --step model       # import SourceAssets/*.glb, render views -> PNGs
+
+Each `modal run` is one ephemeral app: the GPU container stops when the command ends.
 """
 
 import glob
 import json
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -22,14 +26,14 @@ from pathlib import Path
 
 import modal
 
-from image import DATA, EDITOR_USER, GPU_TYPE, SCRIPTS, UE_ROOT, app, state, ue_image, vol
+from image import CPU_CORES, DATA, EDITOR_USER, GPU_TYPE, MEMORY_MB, SCRIPTS, UE_ROOT, app, state, ue_image, vol
 
 RC_URL = "http://127.0.0.1:30010"
 EDITOR_BIN = f"{UE_ROOT}/Engine/Binaries/Linux/UnrealEditor"
-BOOT_TIMEOUT_S = 2400  # first boot compiles shaders; DDC on the volume makes later boots faster
+BOOT_TIMEOUT_S = 3600  # first boot compiles shaders; DDC on the volume makes later boots faster
 PYTHON_TIMEOUT_S = 1800
 HEARTBEAT_S = 30
-MAX_UPTIME_S = 4 * 3600  # hard cap per container, whatever the idle timer says
+MAX_UPTIME_S = 2 * 3600  # hard cap per container, whatever the idle timer says
 RESULT_MARK = "@@RESULT@@"
 
 # Bypass any proxy env for localhost calls to the editor.
@@ -55,6 +59,8 @@ def gpu_diagnostics() -> str:
 @app.cls(
     image=ue_image,
     gpu=GPU_TYPE,
+    cpu=CPU_CORES,
+    memory=MEMORY_MB,
     max_containers=1,  # every call hits the same editor
     scaledown_window=600,  # 10 min idle -> shut down
     timeout=3600,
@@ -151,6 +157,35 @@ class UnrealWorker:
     @modal.method()
     def list_assets(self, path: str = "/Game", recursive: bool = True) -> list:
         return self._snippet(f"emit(list(unreal.EditorAssetLibrary.list_assets({path!r}, {bool(recursive)!r})))")
+
+    @modal.method()
+    def import_model(self, name: str = "") -> dict:
+        """Import a .glb from /data/project/SourceAssets into its own level. Returns the import summary."""
+        found = sorted(glob.glob(f"{DATA}/project/SourceAssets/*.glb"))
+        if name:
+            found = [f for f in found if Path(f).name == name]
+        if not found:
+            raise RuntimeError(f"No .glb in {DATA}/project/SourceAssets (asked for {name!r}).")
+        glb = found[0]
+        if " " in glb:
+            raise RuntimeError(f"Rename {Path(glb).name}: no spaces allowed in the file name.")
+        stem = re.sub(r"\W+", "_", Path(glb).stem)[:48]
+        r = self._exec(f"{SCRIPTS}/import_glb.py {glb} /Game/Imported/{stem} /Game/Maps/{stem}")
+        if not r["ok"]:
+            raise RuntimeError(f"import failed: {r['error'] or r['result']}")
+        summary = json.loads(r["stdout"].strip().splitlines()[-1])
+        vol.commit()
+        return summary
+
+    @modal.method()
+    def render_views(self, width: int = 1920, height: int = 1080) -> dict:
+        """Render the standard views of the imported model. Returns {file name: PNG bytes}."""
+        out = f"{DATA}/shots/views-{time.strftime('%Y%m%d-%H%M%S')}"
+        r = self._exec(f"{SCRIPTS}/render_views.py {out} {int(width)} {int(height)}")
+        if not r["ok"]:
+            raise RuntimeError(f"render failed: {r['error'] or r['result']}")
+        vol.commit()
+        return {p.name: p.read_bytes() for p in sorted(Path(out).glob("*.png"))}
 
     @modal.method()
     def save_all(self) -> dict:
@@ -344,7 +379,7 @@ def _remote_exec(code: str, timeout: float) -> dict:
 
 @app.local_entrypoint()
 def main(step: str = "screenshot"):
-    steps = ["diag", "boot", "python", "screenshot"]
+    steps = ["diag", "boot", "python", "screenshot", "model"]
     if step not in steps:
         raise SystemExit(f"--step must be one of {steps}")
     if step == "diag":
@@ -361,6 +396,17 @@ def main(step: str = "screenshot"):
     if not r["ok"]:
         raise SystemExit("Step 3 failed: Python round-trip")
     if step == "python":
+        return
+
+    if step == "model":
+        summary = worker.import_model.remote()
+        print("import:", json.dumps(summary, indent=2))
+        views = worker.render_views.remote()
+        out_dir = Path("shots") / summary["level"].rsplit("/", 1)[-1]
+        out_dir.mkdir(parents=True, exist_ok=True)
+        for name, png in views.items():
+            (out_dir / name).write_bytes(png)
+        print(f"Wrote {len(views)} views to {out_dir}/: {', '.join(views)}")
         return
 
     r = worker.run_python.remote(f"{SCRIPTS}/spawn_test.py")

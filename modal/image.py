@@ -14,17 +14,20 @@ import modal
 APP_NAME = "unreal"
 
 # Epic's private image. Override at deploy time: UE_IMAGE_TAG=dev-5.4 modal deploy ...
-UE_IMAGE_TAG = os.environ.get("UE_IMAGE_TAG", "dev-slim-5.5")
+UE_IMAGE_TAG = os.environ.get("UE_IMAGE_TAG", "dev-slim-5.8")
 UE_ROOT = "/home/ue4/UnrealEngine"
 EDITOR_USER = "ue4"  # UnrealEditor refuses to run as root; Epic's image ships this user.
 
 DATA = "/data"  # Volume mount point: project/, ddc/, shots/, logs/
 SCRIPTS = "/opt/unreal-mcp/scripts"  # repo's scripts/ dir, mounted read-only
 
-# Rough GPU price for the status estimate (GPU only, excludes CPU/RAM).
-# Check https://modal.com/pricing if you change the GPU type.
+# Worker size. Shader compiling is CPU-bound, so the editor needs real cores and RAM next to the GPU.
 GPU_TYPE = "L4"
-GPU_USD_PER_HOUR = 0.80
+CPU_CORES = 8
+MEMORY_MB = 32768
+# Rough running cost for the status estimate: L4 ~$0.80 + 8 cores ~$0.38 + 32 GiB ~$0.26.
+# Check https://modal.com/pricing if you change the sizes above.
+USD_PER_HOUR = 1.45
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 

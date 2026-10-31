@@ -9,8 +9,9 @@ Full design and build order: `CONNECTION_PLAN.md`.
 - `modal/worker.py`: `UnrealWorker` (L4 GPU, one container, owns the editor process) + build-step runner
 - `modal/gateway.py`: MCP server (Streamable HTTP, bearer auth, CPU only); deploying it ships the worker too
 - `modal/volume_setup.py`: uploads `unreal-project/` to the volume at `/project`
-- `scripts/`: Unreal Python run inside the editor (`spawn_test.py`, `screenshot.py`)
-- `unreal-project/`: `SajimSandbox.uproject` + `Config/` (Remote Control, Python, no CPU throttling)
+- `scripts/`: Unreal Python run inside the editor (`spawn_test.py`, `screenshot.py`, `import_glb.py`, `render_views.py`)
+- `unreal-project/`: `SajimSandbox.uproject` (UE 5.8) + `Config/`; models to import go in `SourceAssets/*.glb`
+- `.github/workflows/unreal-modal.yml`: runs the steps below from GitHub (this cloud sandbox can't reach Modal)
 - `tests/`: gateway tests with a fake backend (no Modal account needed)
 
 ## Commands
@@ -24,11 +25,13 @@ modal run modal/worker.py --step diag           # GPU/Vulkan visibility, no edit
 modal run modal/worker.py --step boot           # step 2
 modal run modal/worker.py --step python         # step 3
 modal run modal/worker.py --step screenshot     # step 4 (go/no-go), PNG lands in ./shots/
+modal run modal/worker.py --step model          # import SourceAssets/*.glb, render 6 views to ./shots/<model>/
 modal deploy modal/gateway.py                   # step 5
 modal volume get unreal-data /shots ./shots     # pull screenshots
 ```
 
-Use another engine version with `UE_IMAGE_TAG=dev-5.4 modal ...` (default `dev-slim-5.5`).
+Use another engine version with `UE_IMAGE_TAG=dev-5.4 modal ...` (default `dev-slim-5.8`).
+From a phone: GitHub → Actions → "Unreal on Modal" → Run workflow → pick the step. Run `diag` first.
 
 ## Rules
 
@@ -36,7 +39,9 @@ Use another engine version with `UE_IMAGE_TAG=dev-5.4 modal ...` (default `dev-s
   (`REGISTRY_USERNAME`, `REGISTRY_PASSWORD`) and `unreal-mcp-auth` (`MCP_AUTH_TOKEN`); Claude Code env
   vars `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET`, `UNREAL_MCP_TOKEN`, `UNREAL_MCP_URL`.
 - **Cost guardrails stay on:** `max_containers=1`, `scaledown_window=600`, `timeout=3600` on the worker,
-  plus a 4 h hard cap (`MAX_UPTIME_S`). Don't loosen them without asking.
+  plus a 2 h hard cap (`MAX_UPTIME_S`), and a 90 min job timeout in the workflow. Worker is L4 + 8 CPU + 32 GiB
+  (~$1.45/h). The user wants Modal costs kept low: don't loosen any of this without asking.
+- **The repo is public.** Client models (e.g. the Rafiki industrial park .glb) only get committed once it's private.
 - The editor runs as user `ue4` (it refuses root). Anything it writes on the volume must be ue4-writable.
 
 ## Using the `unreal` MCP tools

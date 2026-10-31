@@ -1,6 +1,7 @@
 """Upload the local Unreal project to the `unreal-data` Volume at /project.
 
     python modal/volume_setup.py           # upload unreal-project/ (skips Saved/, Intermediate/, ...)
+                                           # models to import go in unreal-project/SourceAssets/*.glb
     python modal/volume_setup.py --list    # show what is on the volume
 
 Overwrites files with the same path; files only on the volume (e.g. levels the

@@ -1,0 +1,76 @@
+# Runs the Unreal-on-Modal build steps from GitHub (Actions tab -> "Unreal on Modal" -> Run workflow).
+# Needs repo secrets MODAL_TOKEN_ID and MODAL_TOKEN_SECRET. Rendered PNGs are attached to the run.
+#
+# Cost: each run is one ephemeral Modal app; the GPU container stops when the step ends,
+# when the job times out, or when you cancel the run. Only one run at a time.
+name: Unreal on Modal
+
+on:
+  workflow_dispatch:
+    inputs:
+      step:
+        description: "diag = GPU check, no editor (cheapest, run first). model = boot + import the .glb + render views."
+        type: choice
+        options: [diag, boot, python, screenshot, model]
+        default: diag
+      ue_image_tag:
+        description: "Epic image tag (ghcr.io/epicgames/unreal-engine:<tag>)"
+        type: string
+        default: dev-slim-5.8
+
+permissions:
+  contents: read
+
+concurrency:
+  group: unreal-modal
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      MODAL_TOKEN_ID: ${{ secrets.MODAL_TOKEN_ID }}
+      MODAL_TOKEN_SECRET: ${{ secrets.MODAL_TOKEN_SECRET }}
+      UE_IMAGE_TAG: ${{ inputs.ue_image_tag }}
+      STEP: ${{ inputs.step }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Modal client
+        run: pip install "modal>=1.6,<1.7"
+
+      - name: Check inputs and secrets
+        run: |
+          if [ -z "$MODAL_TOKEN_ID" ] || [ -z "$MODAL_TOKEN_SECRET" ]; then
+            echo "::error::Add MODAL_TOKEN_ID and MODAL_TOKEN_SECRET under Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          if ! [[ "$UE_IMAGE_TAG" =~ ^[A-Za-z0-9._-]+$ ]]; then
+            echo "::error::ue_image_tag may only contain letters, digits, dot, dash and underscore."
+            exit 1
+          fi
+          if [ "$STEP" = "model" ] && ! ls unreal-project/SourceAssets/*.glb >/dev/null 2>&1; then
+            echo "::error::No .glb in unreal-project/SourceAssets/. Commit the model first (repo must be private)."
+            exit 1
+          fi
+
+      - name: Upload project to the Modal volume
+        if: inputs.step != 'diag'
+        run: python modal/volume_setup.py
+
+      - name: Run step on Modal
+        run: modal run modal/worker.py --step "$STEP"
+
+      - name: Attach renders
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: renders-${{ inputs.step }}-${{ github.run_number }}
+          path: shots/
+          if-no-files-found: ignore
+          retention-days: 14
